@@ -1,0 +1,61 @@
+# Experiment 0: Reproduce existing DPO reference benchmark
+# Pythia-410M, UltraFeedback Binarized, DPO vs DDO-RM
+# Purpose: baseline reference against standard direct-preference method
+
+experiment: exp0_reproduce_dpo_reference
+description: >
+  Reproduce public benchmark: Pythia-410M on UltraFeedback Binarized.
+  DPO vs DDO-RM on pairwise preference data.
+  Expected: DDO-RM pair accuracy 0.5238→0.5602, AUC 0.5315→0.5382.
+
+model_name: "EleutherAI/pythia-410m"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_binarized"
+train_split: "train_prefs"
+eval_split: "test_prefs"
+max_prompt_length: 256
+max_response_length: 256
+
+methods: ["sft", "dpo", "ddorm"]
+seeds: [42, 13, 3407]
+
+metrics:
+  - pair_accuracy
+  - auc
+  - mean_margin
+
+output_dir: "results/exp0_reference"
+
+sft_config:
+  learning_rate: 2.0e-5
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  logging_steps: 10
+  save_steps: 500
+
+dpo_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_ratio: 0.1
+  beta: 0.1
+  logging_steps: 10
+  save_steps: 500
+
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_ratio: 0.1
+  lambda_temp: 1.0
+  tau: 1.0
+  num_candidates: 2
+  logging_steps: 10
+  save_steps: 500

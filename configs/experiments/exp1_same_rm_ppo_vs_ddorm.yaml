@@ -1,0 +1,114 @@
+# Experiment 1: Same-RM PPO-RLHF vs DDO-RM
+# THE MAIN EXPERIMENT — apples-to-apples policy improvement comparison
+# Same SFT checkpoint, same RM, same prompts, same compute budget
+
+experiment: exp1_same_rm_ppo_vs_ddorm
+description: >
+  Main apples-to-apples comparison. PPO-RLHF estimates policy gradient
+  from sampled rollouts; DDO-RM computes it exactly on C_K.
+  Both use the same SFT, same reward model, same prompts.
+  If DDO-RM wins: support-restricted exact update > sampled RL.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_binarized"
+train_split: "train_prefs"
+eval_split: "test_prefs"
+max_prompt_length: 256
+max_response_length: 256
+
+methods: ["sft", "ppo_rlhf", "ddorm", "rm_argmax", "best_of_k", "dpo"]
+seeds: [42, 13, 3407]
+num_candidates: [4, 8, 16]
+
+metrics:
+  - pair_accuracy
+  - auc
+  - mean_margin
+  - reward_score
+  - kl_to_ref
+  - reward_per_update
+  - training_variance
+  - wall_clock
+
+output_dir: "results/exp1_same_rm"
+
+# Phase 1: SFT
+sft_config:
+  learning_rate: 2.0e-5
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  logging_steps: 10
+  save_steps: 500
+
+# Phase 2: Shared reward model
+reward_model_config:
+  learning_rate: 1.0e-5
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 1
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  logging_steps: 10
+  save_steps: 500
+
+# Phase 3: PPO-RLHF
+ppo_rlhf_config:
+  learning_rate: 1.5e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 1
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  kl_coeff: 0.1
+  clip_range: 0.2
+  value_clip_range: 0.2
+  gamma: 1.0
+  gae_lambda: 0.95
+  ppo_epochs: 4
+  max_gen_len: 256
+  reward_normalize: true
+  reward_clip: 10.0
+  logging_steps: 5
+  save_steps: 200
+
+# Phase 4: DDO-RM (run for each K in num_candidates)
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  lambda_temp: 1.0
+  tau: 1.0
+  candidate_generator: "temperature"
+  gen_temperature: 0.8
+  logging_steps: 10
+  save_steps: 500
+
+# Phase 5: DPO reference
+dpo_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  warmup_ratio: 0.1
+  beta: 0.1
+  logging_steps: 10
+  save_steps: 500
+
+# Reranking baselines (no training, inference-only)
+rm_argmax_config:
+  num_candidates: [4, 8, 16]
+
+best_of_k_config:
+  K_values: [4, 8, 16]

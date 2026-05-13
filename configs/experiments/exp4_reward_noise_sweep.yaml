@@ -1,0 +1,55 @@
+# Experiment 4: Reward-model noise / calibration sweep
+# Validates the reward-error term in the oracle inequality
+# Theory: |r̂ - r*|_∞ ≤ ε_RM → value gap ≤ O(ε_RM)
+
+experiment: exp4_reward_noise_sweep
+description: >
+  Inject controlled noise into reward scores.
+  Measure DDO-RM degradation as function of noise level.
+  Validates Proposition 3: DDO-RM is stable when reward error is bounded,
+  degrades when calibration breaks.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_binarized"
+eval_split: "test_prefs"
+
+methods: ["ddorm"]
+seeds: [42, 13, 3407]
+
+# Noise injection parameters
+noise_types:
+  - gaussian           # ξ ~ N(0, σ²)
+  - uniform            # ξ ~ U(-σ, σ)
+  - scale_distortion   # r̂ = α·r, α drawn from [1-σ, 1+σ]
+  - rank_preserving    # monotone distortion preserving ranking
+  - adversarial_top    # flip top-1 with random candidate
+
+sigma_values: [0.0, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0]
+
+# DDO-RM config
+ddorm_config:
+  lambda_temp: 1.0
+  tau: 1.0
+  num_candidates: 8
+
+metrics:
+  - ddorm_pair_accuracy
+  - ddorm_expected_reward
+  - reward_calibration
+  - auc
+  - coverage_adjusted_regret
+  - target_kl
+
+output_dir: "results/exp4_reward_noise"
+
+figures:
+  - x: sigma
+    y: pair_accuracy
+    group_by: noise_type
+    title: "Reward Noise vs Performance"
+  - x: sigma
+    y: target_kl
+    group_by: noise_type
+    title: "Reward Noise vs Target KL"

@@ -1,0 +1,56 @@
+# Experiment 5: RM-argmax / Best-of-K ablation
+# Prevents reviewer objection: "Is DDO-RM just reranking?"
+# Key: DDO-RM distills q* into the LM → generalizes to new prompts
+
+experiment: exp5_reranking_ablation
+description: >
+  Compare DDO-RM (training-time distillation) vs RM-argmax / Best-of-K
+  (inference-time reranking). DDO-RM should beat reranking on held-out
+  prompts because it internalizes the improvement into the policy.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_binarized"
+train_split: "train_prefs"
+eval_split: "test_prefs"
+
+methods: ["sft", "rm_argmax", "best_of_k", "ddorm", "ppo_rlhf"]
+seeds: [42, 13, 3407]
+
+# Best-of-K sweep
+best_of_k_values: [2, 4, 8, 16, 32]
+
+# DDO-RM config
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  lambda_temp: 1.0
+  tau: 1.0
+  num_candidates: 8
+
+# PPO config (for reference)
+ppo_rlhf_config:
+  learning_rate: 1.5e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 1
+  kl_coeff: 0.1
+  clip_range: 0.2
+
+metrics:
+  - pair_accuracy_held_out_prompts
+  - pair_accuracy_new_candidates
+  - reward_score
+  - generalization_gap
+
+output_dir: "results/exp5_reranking"
+
+evaluation:
+  # Test on training prompts with new candidates
+  eval_new_candidates: true
+  eval_new_candidates_K: [4, 8, 16]
+  # Test on held-out prompts
+  eval_held_out_prompts: true

@@ -1,0 +1,4 @@
+model_name: "EleutherAI/pythia-410m"
+model_type: "causal_lm"
+dtype: "bfloat16"
+max_length: 512

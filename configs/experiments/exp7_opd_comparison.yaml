@@ -1,0 +1,66 @@
+# Experiment 7: OPD comparison
+# Position DDO-RM relative to token-level OPD
+# OPD: token-level teacher distillation; DDO-RM: candidate-level reward distillation
+
+experiment: exp7_opd_comparison
+description: >
+  Compare candidate-level (DDO-RM) vs token-level (OPD) distillation.
+  OPD uses teacher logits at token level with top-K support restriction.
+  DDO-RM uses reward model at candidate level with finite support.
+  Both are support-restricted distillation at different granularities.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+teacher_model_name: "meta-llama/Llama-3.2-3B-Instruct"
+
+dataset: "ultrafeedback_binarized"
+train_split: "train_prefs"
+eval_split: "test_prefs"
+
+methods: ["sft", "sampled_opd", "topk_opd", "ddorm", "ppo_rlhf"]
+seeds: [42, 13, 3407]
+
+# OPD config (sampled token distillation)
+sampled_opd_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  tau: 1.0
+
+# OPD top-K (restricted token support)
+topk_opd_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  top_k: 50
+  tau: 1.0
+
+# DDO-RM config
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  lambda_temp: 1.0
+  tau: 1.0
+  num_candidates: 8
+
+# PPO config
+ppo_rlhf_config:
+  learning_rate: 1.5e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 1
+  kl_coeff: 0.1
+
+metrics:
+  - reward_score_held_out
+  - pair_accuracy
+  - kl_drift
+  - token_efficiency
+  - teacher_student_divergence
+  - sequence_quality
+
+output_dir: "results/exp7_opd"

@@ -1,0 +1,14 @@
+method: "opd"
+top_k_support: 32
+teacher_model: null  # set at runtime
+learning_rate: 5.0e-6
+batch_size: 8
+gradient_accumulation_steps: 4
+num_epochs: 3
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_grad_norm: 1.0
+seed: 42
+logging_steps: 10
+eval_steps: 100
+save_steps: 500

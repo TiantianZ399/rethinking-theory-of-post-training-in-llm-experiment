@@ -1,0 +1,14 @@
+method: "grpo"
+num_candidates: 8
+lambda_temp: 1.0
+learning_rate: 1.0e-6
+batch_size: 4
+gradient_accumulation_steps: 8
+num_epochs: 1
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_grad_norm: 1.0
+seed: 42
+logging_steps: 10
+eval_steps: 100
+save_steps: 500

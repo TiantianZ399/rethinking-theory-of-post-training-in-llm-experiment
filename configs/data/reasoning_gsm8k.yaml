@@ -1,0 +1,6 @@
+dataset_name: "openai/gsm8k"
+split_train: "train"
+split_test: "test"
+max_prompt_length: 256
+max_response_length: 512
+task_type: "reasoning"

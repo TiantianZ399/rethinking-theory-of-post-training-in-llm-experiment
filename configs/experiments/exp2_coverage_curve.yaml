@@ -1,0 +1,57 @@
+# Experiment 2: Coverage curve
+# Validates the candidate coverage theorem
+# Theory: V_full - V_C = λ log(1/ρ(C_K))
+# Performance should correlate with candidate coverage
+
+experiment: exp2_coverage_curve
+description: >
+  Generate large reference pool M >> K. Approximate full target q_M.
+  Sample/select smaller candidate sets C_K ⊂ P_M.
+  Compute ρ(C_K) = sum_{y in C_K} q_M(y).
+  Plot performance vs coverage. Validates oracle inequality.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_binarized"
+train_split: "train_prefs"
+eval_split: "test_prefs"
+
+methods: ["ddorm"]
+seeds: [42, 13, 3407]
+
+# Coverage sweep parameters
+reference_pool_size: 128   # M — large pool for reference distribution
+candidate_sizes: [2, 4, 8, 16, 32, 64]  # K values to sweep
+lambda_values: [0.5, 1.0, 2.0]  # entropy temperature sweep
+selection_methods:
+  - random        # random subset of pool
+  - top_reward    # highest-reward candidates
+  - top_policy    # highest-policy-prob candidates
+  - greedy_coverage  # submodular greedy coverage
+
+max_prompts: 200
+gen_temperature: 0.8
+
+metrics:
+  - coverage_rho
+  - ddorm_performance
+  - expected_reward
+  - regret_to_best
+  - pair_accuracy
+  - ndcg_at_k
+
+output_dir: "results/exp2_coverage"
+
+# Desired figures
+figures:
+  - x: coverage_rho
+    y: pair_accuracy
+    title: "Coverage vs Pair Accuracy"
+  - x: coverage_rho
+    y: regret_to_best
+    title: "Coverage vs Regret"
+  - x: K
+    y: coverage_rho
+    title: "Candidate Set Size vs Coverage"
+    group_by: selection_method

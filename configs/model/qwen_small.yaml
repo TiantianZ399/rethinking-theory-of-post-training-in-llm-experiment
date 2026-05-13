@@ -1,0 +1,4 @@
+model_name: "Qwen/Qwen2.5-1.5B"
+model_type: "causal_lm"
+dtype: "bfloat16"
+max_length: 1024

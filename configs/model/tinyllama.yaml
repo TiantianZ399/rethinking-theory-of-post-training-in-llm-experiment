@@ -1,0 +1,4 @@
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_type: "causal_lm"
+dtype: "bfloat16"
+max_length: 1024

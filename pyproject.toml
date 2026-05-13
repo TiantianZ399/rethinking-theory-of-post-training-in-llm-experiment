@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ddorm"
+version = "0.1.0"
+description = "DDO-RM: Support-Restricted Entropy Policy Improvement with Reward Models"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "transformers>=4.36",
+    "datasets>=2.16",
+    "accelerate>=0.25",
+    "peft>=0.7",
+    "trl>=0.7",
+    "wandb",
+    "omegaconf>=2.3",
+    "scipy",
+    "scikit-learn",
+    "pandas",
+    "matplotlib",
+    "seaborn",
+]
+
+[project.scripts]
+ddorm = "ddorm.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "black"]
+eval = ["alpaca-eval", "lm-eval"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

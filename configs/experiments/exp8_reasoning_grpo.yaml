@@ -1,0 +1,66 @@
+# Experiment 8: GRPO / reasoning candidate traces
+# Tests DDO-RM in verifier-guided reasoning setting
+# Highest-ceiling experiment
+
+experiment: exp8_reasoning_grpo
+description: >
+  Generate reasoning traces as candidate sets.
+  Use verifier reward (binary or continuous).
+  Compare DDO-RM over traces vs GRPO vs Best-of-K / self-consistency.
+  If successful: DDO-RM extends beyond preference chat into reasoning.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "reasoning_gsm8k"
+train_split: "train"
+eval_split: "test"
+
+methods: ["sft", "best_of_k", "self_consistency", "grpo", "ppo", "ddorm"]
+seeds: [42, 13, 3407]
+
+# Candidate generation for reasoning
+num_candidates: 8
+gen_temperature: 0.7
+max_reasoning_length: 512
+
+# Verifier
+verifier_type: "exact_match"  # or "continuous_verifier"
+
+# GRPO config
+grpo_config:
+  learning_rate: 5.0e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 3
+  group_size: 8
+  kl_coeff: 0.1
+  clip_range: 0.2
+
+# DDO-RM config (over reasoning traces)
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 3
+  lambda_temp: 0.5  # lower λ for sharper selection of correct traces
+  tau: 1.0
+  num_candidates: 8
+
+# PPO config
+ppo_config:
+  learning_rate: 1.5e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 1
+  kl_coeff: 0.1
+
+metrics:
+  - pass_at_1
+  - pass_at_k
+  - verifier_reward
+  - compute_per_solved
+  - candidate_efficiency
+  - kl_drift
+
+output_dir: "results/exp8_reasoning"

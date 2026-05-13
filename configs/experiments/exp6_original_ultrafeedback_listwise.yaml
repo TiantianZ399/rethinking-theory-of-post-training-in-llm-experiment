@@ -1,0 +1,58 @@
+# Experiment 6: Original UltraFeedback multi-candidate / listwise
+# Move from binary pairs to natural multi-candidate data (K > 2)
+# DDO-RM is strongest when K > 2
+
+experiment: exp6_original_ultrafeedback_listwise
+description: >
+  Use original UltraFeedback with 4 candidate responses per prompt.
+  DDO-RM operates on the natural candidate set rather than binarized pairs.
+  Tests the native DDO-RM setting: finite candidate decision optimization.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_4candidate"
+train_split: "train"
+eval_split: "test"
+
+methods: ["dpo_binarized", "listwise_pl", "rm_argmax", "best_of_4", "ddorm", "ppo_rlhf"]
+seeds: [42, 13, 3407]
+
+# DPO uses binarized version
+dpo_config:
+  dataset: "ultrafeedback_binarized"
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  beta: 0.1
+
+# DDO-RM uses full 4-candidate set
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  lambda_temp: 1.0
+  tau: 1.0
+  num_candidates: 4
+
+# PPO config
+ppo_rlhf_config:
+  learning_rate: 1.5e-6
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  num_epochs: 1
+  kl_coeff: 0.1
+  clip_range: 0.2
+
+metrics:
+  - top1_accuracy
+  - ndcg_at_k
+  - kendall_tau
+  - spearman_rho
+  - expected_reward
+  - regret_to_best
+  - pair_accuracy  # secondary
+
+output_dir: "results/exp6_listwise"

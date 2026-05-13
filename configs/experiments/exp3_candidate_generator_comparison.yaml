@@ -1,0 +1,64 @@
+# Experiment 3: Candidate generator comparison
+# Tests support generation — better generators → better coverage → better DDO-RM
+# Validates: candidate generation is a support-coverage problem
+
+experiment: exp3_candidate_generator_comparison
+description: >
+  Compare candidate generators by coverage and downstream DDO-RM performance.
+  Proves: better candidate generators → higher coverage → better policy improvement.
+
+model_name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+model_dtype: "bfloat16"
+
+dataset: "ultrafeedback_binarized"
+train_split: "train_prefs"
+eval_split: "test_prefs"
+
+methods: ["ddorm"]
+seeds: [42, 13, 3407]
+
+# Candidate generators to compare
+candidate_generators:
+  - name: temperature
+    temperature: 0.8
+  - name: temperature
+    temperature: 1.0
+  - name: temperature
+    temperature: 1.2
+  - name: nucleus
+    top_p: 0.9
+  - name: nucleus
+    top_p: 0.95
+  - name: beam
+    num_beams: 16
+  - name: diverse_beam
+    num_beam_groups: 4
+    diversity_penalty: 1.0
+  - name: diverse_beam
+    num_beam_groups: 4
+    diversity_penalty: 2.0
+  - name: reward_diverse
+    diversity_weight: 0.3
+  - name: submodular
+    lambda_coverage: 1.0
+
+num_candidates: [4, 8, 16]
+
+# DDO-RM training config (shared across generators)
+ddorm_config:
+  learning_rate: 5.0e-6
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  num_epochs: 3
+  lambda_temp: 1.0
+  tau: 1.0
+
+metrics:
+  - coverage_rho
+  - semantic_coverage
+  - expected_reward
+  - ddorm_final_pair_accuracy
+  - candidate_diversity
+  - kl_drift
+
+output_dir: "results/exp3_generators"

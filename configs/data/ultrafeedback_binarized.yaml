@@ -1,0 +1,5 @@
+dataset_name: "HuggingFaceH4/ultrafeedback_binarized"
+split_train: "train_prefs"
+split_test: "test_prefs"
+max_prompt_length: 256
+max_response_length: 256

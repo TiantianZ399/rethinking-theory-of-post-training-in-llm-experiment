@@ -1,0 +1,12 @@
+method: "sft"
+learning_rate: 2.0e-5
+batch_size: 8
+gradient_accumulation_steps: 4
+num_epochs: 3
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_grad_norm: 1.0
+seed: 42
+logging_steps: 10
+eval_steps: 200
+save_steps: 500

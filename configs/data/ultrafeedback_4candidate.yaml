@@ -1,0 +1,6 @@
+dataset_name: "openbmb/UltraFeedback"
+num_candidates: 4
+split_train: "train"
+split_test: "test"
+max_prompt_length: 256
+max_response_length: 256
