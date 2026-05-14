@@ -28,24 +28,39 @@ class RewardModel:
     def __init__(
         self,
         model_name_or_path: str,
-        model_type: str = "sequence_classification",
+        model_type: str = "auto",
         dtype: str = "bfloat16",
         device: str = "auto",
     ):
         """
         Args:
             model_name_or_path: HF model name or local path
-            model_type: "sequence_classification" or "causal_lm_with_head"
+            model_type: "sequence_classification", "causal_lm_with_head", or "auto"
+                        "auto" will detect from rm_config.json if present
             dtype: weight dtype
             device: device map
         """
+        import os
+        import json
+
         dtype_map = {
             "float32": torch.float32,
             "float16": torch.float16,
             "bfloat16": torch.bfloat16,
         }
-        self.model_type = model_type
         td = dtype_map.get(dtype, torch.bfloat16)
+
+        # Auto-detect model type from saved config
+        if model_type == "auto":
+            rm_config_path = os.path.join(model_name_or_path, "rm_config.json")
+            if os.path.exists(rm_config_path):
+                with open(rm_config_path) as f:
+                    rm_cfg = json.load(f)
+                model_type = rm_cfg.get("model_type", "sequence_classification")
+            else:
+                model_type = "sequence_classification"
+
+        self.model_type = model_type
 
         if model_type == "sequence_classification":
             self.model = AutoModelForSequenceClassification.from_pretrained(
@@ -61,6 +76,11 @@ class RewardModel:
                 device_map=device,
             )
             self.model = RewardHeadModel(backbone)
+            # Load value head weights if available
+            value_head_path = os.path.join(model_name_or_path, "value_head.pt")
+            if os.path.exists(value_head_path):
+                value_head_state = torch.load(value_head_path, map_location="cpu")
+                self.model.value_head.load_state_dict(value_head_state)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         if self.tokenizer.pad_token is None:

@@ -47,7 +47,7 @@ class DiverseBeamSearchGenerator(CandidateGenerator):
             max_length: max new tokens to generate
 
         Returns:
-            CandidateOutput with candidates, log_probs, metadata
+            CandidateOutput with candidates, candidate_ids, gen_logprobs, metadata
         """
         model.eval()
         all_candidates = []
@@ -90,11 +90,24 @@ class DiverseBeamSearchGenerator(CandidateGenerator):
             all_ids.append(torch.stack(gen_ids_list) if isinstance(gen_ids_list[0], torch.Tensor) else None)
 
         # Compute log-probs via forward pass
-        log_probs = self._compute_log_probs(prompts, all_candidates, model, tokenizer)
+        gen_logprobs = self._compute_log_probs(prompts, all_candidates, model, tokenizer)
+
+        # Build padded candidate_ids tensor
+        device = model.device if hasattr(model, 'device') else next(model.parameters()).device
+        valid_ids = [t for t in all_ids if t is not None]
+        if valid_ids:
+            max_seq = max(t.shape[1] for t in valid_ids)
+            batch_ids = torch.zeros(len(prompts), K, max_seq, dtype=torch.long, device=device)
+            for i, t in enumerate(all_ids):
+                if t is not None:
+                    batch_ids[i, :, :t.shape[1]] = t
+        else:
+            batch_ids = torch.zeros(len(prompts), K, 1, dtype=torch.long, device=device)
 
         return CandidateOutput(
             candidates=all_candidates,
-            log_probs=log_probs,
+            candidate_ids=batch_ids,
+            gen_logprobs=gen_logprobs,
             metadata={
                 "generator": "diverse_beam_search",
                 "num_beam_groups": self.num_beam_groups,
@@ -108,12 +121,13 @@ class DiverseBeamSearchGenerator(CandidateGenerator):
         """Compute sequence log-probs for each prompt-candidate pair."""
         B = len(prompts)
         K = len(all_candidates[0])
-        log_probs = torch.zeros(B, K)
+        device = next(model.parameters()).device
+        log_probs = torch.zeros(B, K, device=device)
 
         for i, (prompt, candidates) in enumerate(zip(prompts, all_candidates)):
             for j, cand in enumerate(candidates):
                 full_text = prompt + cand
-                inputs = tokenizer(full_text, return_tensors="pt").to(model.device)
+                inputs = tokenizer(full_text, return_tensors="pt").to(device)
                 prompt_ids = tokenizer(prompt, return_tensors="pt").input_ids
                 prompt_len = prompt_ids.shape[1]
 
@@ -127,6 +141,6 @@ class DiverseBeamSearchGenerator(CandidateGenerator):
                         1, target_ids.unsqueeze(1)
                     ).squeeze(1).sum()
 
-                log_probs[i, j] = seq_log_prob.cpu()
+                log_probs[i, j] = seq_log_prob
 
         return log_probs

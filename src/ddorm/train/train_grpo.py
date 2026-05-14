@@ -170,6 +170,10 @@ def train_grpo(
                 }, step=global_step)
                 tracker.print_last(["loss", "mean_reward"])
 
+            if global_step % config.save_steps == 0:
+                unwrapped = accelerator.unwrap_model(model)
+                save_checkpoint(unwrapped, optimizer, global_step, output_dir, "grpo")
+
     unwrapped = accelerator.unwrap_model(model)
     unwrapped.save_pretrained(f"{output_dir}/final")
     tokenizer.save_pretrained(f"{output_dir}/final")

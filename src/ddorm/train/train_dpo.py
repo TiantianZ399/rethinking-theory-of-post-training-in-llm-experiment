@@ -42,9 +42,9 @@ def _get_response_logprobs(model, tokenizer, prompt, response, max_length=512):
 
 def train_dpo(
     model_name: str,
-    ref_model_path: str,
     dataset,
     config: TrainConfig,
+    ref_model_path: str = None,
     output_dir: str = "results/dpo",
     beta: float = 0.1,
 ):
@@ -71,7 +71,7 @@ def train_dpo(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    ref = ReferenceModel(ref_model_path)
+    ref = ReferenceModel(ref_model_path or model_name)
 
     dataloader = DataLoader(
         dataset, batch_size=config.batch_size, shuffle=True,

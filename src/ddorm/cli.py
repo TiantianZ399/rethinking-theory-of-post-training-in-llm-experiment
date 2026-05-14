@@ -258,11 +258,9 @@ def cmd_train_ppo(args):
         output_dir=args.output_dir,
         kl_coeff=args.kl_coeff,
         clip_range=args.clip_range,
-        value_clip_range=args.value_clip_range,
         gamma=args.gamma,
         gae_lambda=args.gae_lambda,
-        ppo_epochs=args.ppo_epochs,
-        max_gen_len=args.max_gen_len,
+        num_ppo_epochs=args.ppo_epochs,
     )
     print(json.dumps(result, indent=2))
 
@@ -292,12 +290,27 @@ def cmd_train_grpo(args):
     split = args.train_split or "train"
     dataset = load_dataset_by_name(args.dataset, split=split, max_samples=args.max_samples)
 
+    ref_path = args.ref_model_path or args.model_name
+
+    # Build reward function from reward model if provided
+    reward_fn = None
+    if args.reward_model_path:
+        from .models.reward_model import RewardModel
+        _rm = RewardModel(args.reward_model_path)
+        def reward_fn(prompt, response):
+            scores = _rm.score([prompt], [[response]])
+            return scores[0, 0].item()
+
     result = train_grpo(
-        args.model_name, dataset, config,
+        args.model_name,
+        ref_model_path=ref_path,
+        dataset=dataset,
+        config=config,
         output_dir=args.output_dir,
-        group_size=args.num_candidates,
+        num_candidates=args.num_candidates,
         kl_coeff=args.kl_coeff,
         clip_range=args.clip_range,
+        reward_fn=reward_fn,
     )
     print(json.dumps(result, indent=2))
 
@@ -334,7 +347,7 @@ def cmd_train_opd(args):
         config,
         output_dir=args.output_dir,
         top_k=args.opd_top_k,
-        tau=args.tau,
+        temperature=args.tau,
     )
     print(json.dumps(result, indent=2))
 
@@ -345,13 +358,12 @@ def cmd_train_opd(args):
 
 def cmd_eval(args):
     """Run evaluation on a trained model."""
-    from .eval.pairwise_eval import pairwise_accuracy, pairwise_auc, pairwise_margin
-    from .eval.listwise_eval import ndcg_at_k, kendall_tau, top1_accuracy, expected_reward
-    from .eval.coverage_eval import coverage_evaluation
-    from .eval.kl_eval import kl_evaluation
+    from .eval.pairwise_eval import pairwise_eval
+    from .eval.kl_eval import evaluate_kl_from_models
     from .eval.bootstrap import bootstrap_ci
     from .models.policy import PolicyModel
     from .models.reward_model import RewardModel
+    from .models.reference_model import ReferenceModel
 
     split = args.eval_split or "test_prefs"
     dataset = load_dataset_by_name(args.dataset, split=split, max_samples=args.max_samples)
@@ -360,40 +372,54 @@ def cmd_eval(args):
     results = {}
 
     # Pairwise metrics
-    if hasattr(dataset[0], 'get') and 'chosen' in dataset[0]:
+    first_item = dataset[0] if hasattr(dataset, '__getitem__') else next(iter(dataset))
+    if isinstance(first_item, dict) and 'chosen' in first_item:
         prompts = [d["prompt"] for d in dataset]
         chosen = [d["chosen"] for d in dataset]
         rejected = [d["rejected"] for d in dataset]
 
+        import torch
         chosen_scores = policy.batch_score(prompts, [[c] for c in chosen]).squeeze(-1)
         rejected_scores = policy.batch_score(prompts, [[r] for r in rejected]).squeeze(-1)
 
-        import torch
-        pair_acc = pairwise_accuracy(chosen_scores, rejected_scores)
-        auc = pairwise_auc(chosen_scores, rejected_scores)
-        margin = pairwise_margin(chosen_scores, rejected_scores)
+        pw_result = pairwise_eval(chosen_scores, rejected_scores)
 
-        results["pair_accuracy"] = pair_acc
-        results["auc"] = auc
-        results["margin"] = margin.mean().item()
+        results["pair_accuracy"] = pw_result.pair_accuracy
+        results["auc"] = pw_result.auc
+        results["margin"] = pw_result.mean_margin
 
         # Bootstrap CIs
+        import numpy as np
         acc_values = (chosen_scores > rejected_scores).float().cpu().numpy()
-        results["pair_accuracy_ci"] = bootstrap_ci(acc_values)
-
-    # Reward model eval
-    if args.reward_model_path:
-        rm = RewardModel(args.reward_model_path)
-        # Could score and compute reward-based metrics here
+        ci = bootstrap_ci(acc_values)
+        results["pair_accuracy_ci"] = {
+            "mean": ci.mean, "ci_lower": ci.ci_lower, "ci_upper": ci.ci_upper,
+        }
 
     # KL eval
     if args.ref_model_path:
-        kl_result = kl_evaluation(
-            policy_model_name=args.model_path,
-            ref_model_name=args.ref_model_path,
-            dataset=dataset,
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        policy_model = AutoModelForCausalLM.from_pretrained(
+            args.model_path, torch_dtype=torch.bfloat16, device_map="auto"
         )
-        results["kl_divergence"] = kl_result
+        ref = ReferenceModel(args.ref_model_path)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        # Use a subset for KL eval
+        eval_prompts = prompts[:min(100, len(prompts))]
+        eval_chosen = chosen[:min(100, len(chosen))]
+
+        kl_result = evaluate_kl_from_models(
+            policy_model, ref, tokenizer,
+            eval_prompts, eval_chosen,
+        )
+        results["kl_divergence"] = {
+            "mean": kl_result.mean_kl,
+            "std": kl_result.std_kl,
+            "per_token": kl_result.kl_per_token,
+        }
 
     out_path = Path(args.output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -441,7 +467,7 @@ def cmd_coverage(args):
             # Here we use a placeholder computation
             ref_scores = torch.randn(M)  # placeholder
             ref_rewards = torch.randn(M)  # placeholder
-            candidate_indices = list(range(K))
+            candidate_indices = torch.arange(K)
 
             cov = estimate_coverage(ref_scores, ref_rewards, candidate_indices, lam=args.lambda_temp)
             results["curves"].append({
@@ -462,7 +488,7 @@ def cmd_coverage(args):
 
 def cmd_reward_noise(args):
     """Run reward noise sweep experiment."""
-    from .theory.reward_noise import run_reward_noise_experiment
+    from .theory.reward_noise import reward_noise_sweep
     import torch
 
     dataset = load_dataset_by_name(
@@ -473,20 +499,37 @@ def cmd_reward_noise(args):
 
     # Load policy scores and rewards from a pre-trained model
     # In practice, these come from the model; here we set up the sweep
-    results = run_reward_noise_experiment(
-        policy_scores=torch.randn(100, args.num_candidates),  # placeholder
-        reward_scores=torch.randn(100, args.num_candidates),
-        lam=args.lambda_temp,
-        sigma_range=[0.0, 0.1, 0.2, 0.5, 1.0, 2.0],
-        noise_types=["gaussian", "uniform", "scale", "rank_preserving", "adversarial_top"],
-    )
+    noise_levels = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0]
+    noise_types = ["gaussian", "scale", "rank_preserving", "adversarial_top_flip"]
+    all_results = {}
+
+    policy_scores = torch.randn(100, args.num_candidates)  # placeholder
+    reward_scores = torch.randn(100, args.num_candidates)
+
+    for noise_type in noise_types:
+        sweep_results = reward_noise_sweep(
+            policy_scores=policy_scores,
+            clean_rewards=reward_scores,
+            noise_type=noise_type,
+            noise_levels=noise_levels,
+            lam=args.lambda_temp,
+        )
+        all_results[noise_type] = [
+            {
+                "noise_level": r.noise_level,
+                "value_gap": r.value_gap,
+                "theoretical_bound": r.theoretical_bound,
+                "rank_correlation": r.rank_correlation,
+            }
+            for r in sweep_results
+        ]
 
     out_path = Path(args.output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     with open(out_path / "reward_noise_results.json", "w") as f:
-        json.dump(results, f, indent=2, default=str)
+        json.dump(all_results, f, indent=2, default=str)
 
-    print(json.dumps(results, indent=2, default=str))
+    print(json.dumps(all_results, indent=2, default=str))
 
 
 # ---------------------------------------------------------------------------
@@ -512,19 +555,32 @@ def cmd_run_experiment(args):
     print(f"Seeds: {seeds}")
     print(f"Model: {model}")
 
+    # Method name mapping: YAML config names -> CLI subcommand names
+    METHOD_ALIASES = {
+        "ppo_rlhf": "ppo",
+        "reward_model": "rm",
+    }
+    # Methods that are inference-only (not training commands)
+    INFERENCE_ONLY = {"rm_argmax", "best_of_k"}
+
     all_results = []
 
     for seed in seeds:
         for method in methods:
+            if method in INFERENCE_ONLY:
+                print(f"Skipping {method} (inference-only, not a training method)")
+                continue
+
+            cli_method = METHOD_ALIASES.get(method, method)
             output_dir = f"{output_base}/{method}_seed{seed}"
             print(f"\n{'='*60}")
-            print(f"Method: {method} | Seed: {seed}")
+            print(f"Method: {method} (cli: {cli_method}) | Seed: {seed}")
             print(f"{'='*60}")
 
             # Build method-specific args
             method_cfg = cfg.get(f"{method}_config", {})
             cmd_args = [
-                "train", method,
+                "train", cli_method,
                 "--model_name", model,
                 "--dataset", dataset,
                 "--seed", str(seed),
@@ -643,6 +699,8 @@ def build_parser():
     p.add_argument("--num_candidates", type=int, default=8)
     p.add_argument("--kl_coeff", type=float, default=0.1)
     p.add_argument("--clip_range", type=float, default=0.2)
+    p.add_argument("--reward_model_path", default=None)
+    p.add_argument("--ref_model_path", default=None)
     p.set_defaults(func=cmd_train_grpo)
 
     # OPD

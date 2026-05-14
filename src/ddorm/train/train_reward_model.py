@@ -10,6 +10,7 @@ Produces the shared RM used by PPO-RLHF, DDO-RM, and baselines.
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from pathlib import Path
 from accelerate import Accelerator
 
 from ..models.reward_model import RewardModel
@@ -125,8 +126,17 @@ def train_reward_model(
 
     # Save final
     unwrapped = accelerator.unwrap_model(model)
-    torch.save(unwrapped.state_dict(), f"{output_dir}/rm_final.pt")
-    tokenizer.save_pretrained(f"{output_dir}/final")
+    final_dir = f"{output_dir}/final"
+    Path(final_dir).mkdir(parents=True, exist_ok=True)
+    # Save the backbone in HuggingFace format
+    unwrapped.backbone.save_pretrained(final_dir)
+    tokenizer.save_pretrained(final_dir)
+    # Save the value head weights alongside
+    torch.save(unwrapped.value_head.state_dict(), f"{final_dir}/value_head.pt")
+    # Save a marker so RewardModel knows to load as causal_lm_with_head
+    import json
+    with open(f"{final_dir}/rm_config.json", "w") as f:
+        json.dump({"model_type": "causal_lm_with_head"}, f)
     tracker.save()
 
     return {
