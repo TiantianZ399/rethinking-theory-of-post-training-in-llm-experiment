@@ -137,7 +137,7 @@ where ρ = coverage of the optimal policy mass by C\_K, ε\_RM = reward model er
 @article{zhang2025ddorm,
   title={DDO-RM: Support-Restricted Entropy Policy Improvement
          with Reward Models for LLM Post-Training},
-  author={Zhang, Tiantian and Zuo, Jierui and Chen, Michael and Wang, Wenping},
+  author={Zhang, Tiantian and Zuo, Jierui and Chen, Michael and Anjiang Wei},
   year={2025}
 }
 ```
