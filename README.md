@@ -45,7 +45,7 @@ q_lambda^*(y | x) proportional to pi_theta(y | x) exp(r(x,y)/lambda).
 
 This is a skeleton. The core math utilities and toy tests are implemented; GPU-heavy trainers are placeholders with explicit TODOs.
 
-⭕️ Current workshop minimum package is from [workshop minumum roadmap](https://github.com/TiantianZ399/rethinking-theory-of-post-training-in-llm-experiment/blob/main/docs/DDO_RM_MINIMAL_WORKSHOP_README.md)
+⭕️ Current workshop minimum package is inside [here](https://github.com/TiantianZ399/rethinking-theory-of-post-training-in-llm-experiment/blob/main/docs/DDO_RM_MINIMAL_WORKSHOP_README.md)
 
 ## Suggested run order
 
